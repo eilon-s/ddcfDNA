@@ -1,6 +1,6 @@
-# cfDNA1G
+# ddcfDNA
 
-## installing cfDNA1G
+## installing ddcfDNA
 
 * install miniconda3 (https://conda.io/miniconda.html)
 * ~/miniconda3/bin/conda config --add channels r
@@ -27,11 +27,11 @@ export PYTHONHOME=;)
 so a run shell may look like that:
 
 source ~/miniconda3/bin/activate cfDNA;
-export LD_LIBRARY_PATH=/home/<YOUR USER NAME>/miniconda3/envs/cfDNA/lib
-export PYTHONHOME=/home/<YOUR USER NAME>/miniconda3/envs/cfDNA
-cfDNA1G/python/cfDNA_infer_donor_fraction.exe --help;
-export LD_LIBRARY_PATH=;
-export PYTHONHOME=;
+export LD_LIBRARY_PATH=/home/<YOUR USER NAME>/miniconda3/envs/cfDNA/lib; 
+export PYTHONHOME=/home/<YOUR USER NAME>/miniconda3/envs/cfDNA; 
+ddcfDNA/cfDNA_infer_donor_fraction.exe --help;
+export LD_LIBRARY_PATH=; 
+export PYTHONHOME=; 
 
 ## installing WASP
 
