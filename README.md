@@ -23,7 +23,7 @@ pip install --user autograd;
   * ~/anaconda2/bin/conda create -n wasp python=2.7 --file workflow/requirements2.txt
 
 ## Full workflow 
-The workflow creates the input file for the inference algorithm, runs the inference for each sample and then collect the results.
+The workflow download the required files, creates the input file for the inference algorithm, runs the inference for each sample and then collect the results.
 
 See README under the workflow directory
 
