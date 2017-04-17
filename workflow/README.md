@@ -1,6 +1,6 @@
 # Workflow files
 1. Copy these files to the work directory
-2. modify the config file to point to the scripts directory
+2. Modify the config file to point to the scripts directory
 3. Modify the config file to point to the Data directory. The data directory should contain:
   a. Patients table <set name>.recipient.genotypes.tsv (tsv with header)
   b. Samples tables <set name>.samples.tsv (tsv with header)
