@@ -1,1 +1,1 @@
-# scripts for simulating samples with diffrent levels of SNPs and cfDNA sequencing reads
+Scripts for simulating samples with diffrent levels of dd-cfDNA, SNPs and cfDNA sequencing reads
