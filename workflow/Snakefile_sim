@@ -1,0 +1,282 @@
+
+##########################################################################################
+##########################################################################################
+# simulation based on bm set
+##########################################################################################
+##########################################################################################
+
+
+import os
+import pandas as pd
+
+
+##########################################################################################
+# creating jobs output directory
+##########################################################################################
+
+# This is because otherwise it seems to fail snakemake in some clusters.
+
+jobs_output_dir = 'Output/jobs_files'
+benchmarks_output_dir = 'Output/benchmarks'
+
+
+if not os.path.exists(jobs_output_dir):
+	print("Creating jobs output directory: %s" % (jobs_output_dir) )
+	os.makedirs(jobs_output_dir)
+
+if not os.path.exists(benchmarks_output_dir):
+	print("Creating benchmarks output directory: %s" % (benchmarks_output_dir) )
+	os.makedirs(benchmarks_output_dir)
+
+##########################################################################################
+# constants
+##########################################################################################
+
+CHR_UN = "chrUn_gl000211.fa chrUn_gl000212.fa chrUn_gl000213.fa chrUn_gl000214.fa chrUn_gl000215.fa chrUn_gl000216.fa chrUn_gl000217.fa chrUn_gl000218.fa chrUn_gl000219.fa chrUn_gl000220.fa chrUn_gl000221.fa chrUn_gl000222.fa chrUn_gl000223.fa chrUn_gl000224.fa chrUn_gl000225.fa chrUn_gl000226.fa chrUn_gl000227.fa chrUn_gl000228.fa chrUn_gl000229.fa chrUn_gl000230.fa chrUn_gl000231.fa chrUn_gl000232.fa chrUn_gl000233.fa chrUn_gl000234.fa chrUn_gl000235.fa chrUn_gl000236.fa chrUn_gl000237.fa chrUn_gl000238.fa chrUn_gl000239.fa chrUn_gl000240.fa chrUn_gl000241.fa chrUn_gl000242.fa chrUn_gl000243.fa chrUn_gl000244.fa chrUn_gl000245.fa chrUn_gl000246.fa chrUn_gl000247.fa chrUn_gl000248.fa chrUn_gl000249.fa"
+CHR_RAND = "chr11_gl000202_random.fa chr17_gl000203_random.fa chr17_gl000204_random.fa chr17_gl000205_random.fa chr17_gl000206_random.fa chr18_gl000207_random.fa chr19_gl000208_random.fa chr19_gl000209_random.fa chr1_gl000191_random.fa chr1_gl000192_random.fa chr21_gl000210_random.fa chr4_gl000193_random.fa chr4_gl000194_random.fa chr7_gl000195_random.fa chr8_gl000196_random.fa chr8_gl000197_random.fa chr9_gl000198_random.fa chr9_gl000199_random.fa chr9_gl000200_random.fa chr9_gl000201_random.fa"
+CHR_HAP = "chr17_ctg5_hap1.fa chr4_ctg9_hap1.fa chr6_apd_hap1.fa chr6_cox_hap2.fa chr6_dbb_hap3.fa chr6_mann_hap4.fa chr6_mcf_hap5.fa chr6_qbl_hap6.fa chr6_ssto_hap7.fa"
+CHR_NORM =  "chr1.fa chr2.fa chr3.fa chr4.fa chr5.fa chr6.fa chr7.fa chr8.fa chr9.fa chr10.fa chr11.fa chr12.fa chr13.fa chr14.fa chr15.fa chr16.fa chr17.fa chr18.fa chr19.fa chr20.fa chr21.fa chr22.fa chrM.fa chrX.fa chrY.fa"
+
+ILLUMIN_MANIFEST_FILES = ["HumanOmni1-Quad_v1-0_H","HumanOmni2-5-8-v1-1-C","HumanOmni2-5-8-v1-0-D"]
+
+
+
+Rscript = "Rscript --no-restore --no-save "
+
+
+chrs_num_auto = ["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22"]
+g1k_pops = ["ACB","ASW","BEB","CDX","CEU","CHB","CHS","CLM","ESN","FIN","GBR","GIH","GWD","IBS","ITU","JPT","KHV","LWK","MSL","MXL","PEL","PJL","PUR","STU","TSI","YRI"]
+
+##########################################################################################
+# functions
+##########################################################################################
+
+def get_patients_array_data(patients_array_type_filename):
+	patients_df = pd.read_table(patients_array_type_filename, sep='\t')
+	patients_df = patients_df[patients_df.RecArrayTypeManifest.notnull()]
+	patients_df.reset_index(inplace=True, drop=True)
+	return patients_df.Patient.tolist(), patients_df
+
+def get_patients_info(patients_df, patient_id, info_col):
+	return patients_df[info_col][patients_df.Patient == patient_id].values[0]
+	
+# TODO - add sample filter?
+def get_samples_array_data(samples_info_table_filename):
+	samples_array_df = pd.read_table(samples_info_table_filename, sep='\t')
+	samples_array_df = samples_array_df[samples_array_df.Patient.notnull() & samples_array_df.IsFullInfo==True]
+	samples_array_df.reset_index(inplace=True, drop=True)
+	
+	all_samples = samples_array_df.SampleUniqueStr.tolist()
+	single_ends_samples = samples_array_df.SampleUniqueStr[samples_array_df.SeqType == 'single-end'].tolist()
+	paired_ends_samples = samples_array_df.SampleUniqueStr[samples_array_df.SeqType == 'paired-end'].tolist()
+	
+	return all_samples, single_ends_samples, paired_ends_samples, samples_array_df
+
+def get_sample_info(samples_array_df, sample_id, info_col):
+	return samples_array_df[info_col][samples_array_df.SampleUniqueStr == sample_id].values[0]
+
+##########################################################################################
+# load patients table
+##########################################################################################
+
+patients_array_type_filename = '../bm/Data/' + config["__default__"]["SET_NAME"] + ".recipient.genotypes.tsv"
+
+patients, patients_df = get_patients_array_data(patients_array_type_filename)
+
+##########################################################################################
+# load samples table
+##########################################################################################
+
+samples_info_table_filename = '../bm/Data/' + config['__default__']['SET_NAME'] + ".samples.tsv"
+
+samples, single_ends_samples, paired_ends_samples, samples_array_df = get_samples_array_data(samples_info_table_filename)
+
+# TODO run for all samples 
+samples, = glob_wildcards("../bm/Data/SampleGenotypes/{sample}.geno.dist.tab")
+#print(samples)
+
+
+
+##########################################################################################
+##########################################################################################
+# simulations
+##########################################################################################
+##########################################################################################
+
+
+def get_sim_data(sim_table_filename):
+	sim_df = pd.read_table(sim_table_filename, sep='\t')
+	return sim_df.SampleUniqueStr.tolist(), sim_df
+
+def get_sim_info(sim_df, sim_sample, info_col):
+	cur_info = str(sim_df[info_col][sim_df.SampleUniqueStr == sim_sample].values[0])
+	return(cur_info)
+
+
+def get_sample_geno_filename(sim_df, sim_sample, info_col):
+	cur_info = str(sim_df[info_col][sim_df.SampleUniqueStr == sim_sample].values[0])
+	return('../bm_new/Output/SampleGenotypes/' + cur_info + '.allele_cnt.geno.dist.gz')
+		
+##########################################################################################
+# load patients table
+##########################################################################################
+
+sim_table_filename = config["simulations"]["sim_table_filename"]
+
+sim_samples, sim_df = get_sim_data(sim_table_filename)
+
+
+##########################################################################################
+# all
+##########################################################################################
+
+rule all:
+	input:
+		inferred_sim_donor_cfDNA_table = "Output/Fit/fit_sim_" + config["__default__"]["fit_version"] + ".res.tsv"
+
+
+
+##########################################################################################
+##########################################################################################
+# run inference of donor levels
+##########################################################################################
+##########################################################################################
+
+
+def get_sim_sample_donor_relatedness(sim_sample, sim_df, samples_array_df):
+	sample_id = str(sim_df['Sample1'][sim_df.SampleUniqueStr == sim_sample].values[0])
+	if 'DonorType' in samples_array_df.columns:
+		return(samples_array_df['DonorType'][samples_array_df.SampleUniqueStr == sample_id].values[0])
+	else:
+		return('UNKNOWN')
+
+
+
+rule infer_sim_donor_cfDNA_level:
+	input:
+		sample_ac_geno_dist = "Output/SampleGenotypes/" + config["__default__"]["fit_version"] + "/{sample}.allele_cnt.geno.dist.filt.gz"
+	output:
+		sample_inferred_donor_cfDNA = "Output/Fit/" + config["__default__"]["fit_version"] + "/{sample}.param_fit_results.tsv"
+	params:
+		job_out_dir  = "Output/jobs_files",
+		job_out_file = "s_{sample}_infer",
+		job_name     = "s_{sample}_infer",
+		run_time     = "8:59:00",
+		cores        = "1",
+		memory       = "8",
+		input_relatedness = lambda wildcards: get_sim_sample_donor_relatedness(wildcards.sample, sim_df, samples_array_df),
+		infer_pops = lambda wildcards: get_sim_info(sim_df, wildcards.sample, "sim_pops")
+	benchmark:
+		"Output/benchmarks/{sample}.infer.txt"
+	shell:
+		"export LD_LIBRARY_PATH=~/miniconda3/envs/cfDNA/lib "
+		"export PYTHONHOME=~/miniconda3/envs/cfDNA; "
+		"python {config[__default__][SCRIPTS_PATH]}/cfDNA_infer_donor_fraction.exe "
+		"{input.sample_ac_geno_dist} {output.sample_inferred_donor_cfDNA} "
+		"-s {wildcards.sample} "
+		"-i {config[infer_donor_cfDNA_level][infer_relatedness]} "
+		"-r {params.input_relatedness} "
+		"-n {config[infer_donor_cfDNA_level][num_optimization_starting_points]} "
+		"-m {config[infer_donor_cfDNA_level][minimal_allele_frequency]} "
+		" {config[infer_donor_cfDNA_level][use_relationship_prior]} "
+		"-v -p {params.infer_pops}; "
+		"export LD_LIBRARY_PATH=; "
+		"export PYTHONHOME=; "
+
+
+##########################################################################################
+# creating simulation sample genotypes
+##########################################################################################
+
+
+rule create_sim_genotype_files:
+	input:
+		sample1_filename = lambda wildcards: get_sample_geno_filename(sim_df, wildcards.sample, "Sample1"),
+		sample2_filename = lambda wildcards: get_sample_geno_filename(sim_df, wildcards.sample, "Sample2")
+	output:
+		sim_sample_geno_filename = "Output/SampleGenotypes/{sample}.allele_cnt.geno.dist.gz"
+	params:
+		job_out_dir  = "Output/jobs_files",
+		job_out_file = "s_{sample}_createSim",
+		job_name     = "s_{sample}_createSim",
+		run_time     = "7:59:00",
+		cores        = "1",
+		memory       = "8",
+		Sim_NumSNPs  = lambda wildcards: get_sim_info(sim_df, wildcards.sample, 'Sim_NumSNPs'),
+		Sim_SNPs_selectionMethod  = lambda wildcards: get_sim_info(sim_df, wildcards.sample, 'Sim_SNPs_selectionMethod'),
+		Sample2_fraction  = lambda wildcards: get_sim_info(sim_df, wildcards.sample, 'Sample2_fraction'),
+		Sim_reads_per_SNP  = lambda wildcards: get_sim_info(sim_df, wildcards.sample, 'Sim_reads_per_SNP'),
+		ibd_m1  = lambda wildcards: get_sim_info(sim_df, wildcards.sample, 'ibd_m1'),
+		ibd_m2  = lambda wildcards: get_sim_info(sim_df, wildcards.sample, 'ibd_m2')
+	benchmark:
+		"Output/benchmarks/{sample}.createSim.txt"
+	shell:
+		"python {config[__default__][SCRIPTS_PATH]}/simulations/cfDNA_create_sim_geno_from_two_samples.py "
+		"{input.sample1_filename} {input.sample2_filename} {output.sim_sample_geno_filename} "
+		"-f {params.Sample2_fraction} "
+		"-s {params.Sim_NumSNPs} "
+		"-m {params.Sim_SNPs_selectionMethod} "
+		"-r {params.Sim_reads_per_SNP} "
+		"-m1 {params.ibd_m1} "
+		"-m2 {params.ibd_m2} "
+		
+
+##########################################################################################
+# filtering and inferring simulations 
+##########################################################################################
+
+rule filter_sim_genotype_files:
+	input:
+		sample_ac_geno_dist = "Output/SampleGenotypes/{sample}.allele_cnt.geno.dist.gz"
+	output:
+		sample_ac_geno_dist_filt = "Output/SampleGenotypes/" + config["__default__"]["fit_version"] + "/{sample}.allele_cnt.geno.dist.filt.gz"
+	params:
+		job_out_dir  = "Output/jobs_files",
+		job_out_file = "s_{sample}_filtGeno",
+		job_name     = "s_{sample}_filtGeno",
+		run_time     = "4:00:00",
+		cores        = "1",
+		memory       = "4"
+	benchmark:
+		"Output/benchmarks/{sample}.filterSNPs.txt"
+	shell:
+		"python {config[__default__][SCRIPTS_PATH]}/cfDNA_filter_SNPs.py "
+		"{input.sample_ac_geno_dist} {output.sample_ac_geno_dist_filt} "
+		"-f {config[filter_genotype_files][low_allele_frequency_threshold]} "
+		"{config[filter_genotype_files][is_threshold_for_any_pop]} "
+		"-s {config[filter_genotype_files][min_number_of_SNPs_per_block]} "
+		"-r {config[filter_genotype_files][min_number_of_reads_per_block]} "
+		"-g {config[filter_genotype_files][min_gc_score]} "
+
+
+##########################################################################################
+# collecting simulations results
+##########################################################################################
+
+
+rule collect_sim_donor_cfDNA_level:
+	input:
+		expand("Output/Fit/" + config["__default__"]["fit_version"] + "/{sample}.param_fit_results.tsv", sample=sim_samples),
+		samples_table = config["simulations"]["sim_table_filename"]
+	output:
+		inferred_sim_donor_cfDNA_table = "Output/Fit/fit_sim_" + config["__default__"]["fit_version"] + ".res.tsv"
+	params:
+		job_out_dir  = "Output/jobs_files",
+		job_out_file = "collect_sim_donor_cfDNA",
+		job_name     = "collect_sim_donor_cfDNA",
+		run_time     = "2:00:00",
+		cores        = "1",
+		memory       = "4",
+		output_dir = "Output/Fit/" + config["__default__"]["fit_version"]
+	shell:
+		"python {config[__default__][SCRIPTS_PATH]}/cfDNA_collect_inference_results.py "
+		"{input.samples_table} {params.output_dir} {output.inferred_sim_donor_cfDNA_table}"
+
+
+
+
+
+
+
+
+

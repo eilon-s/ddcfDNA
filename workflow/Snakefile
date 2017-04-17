@@ -1,0 +1,957 @@
+
+
+import os
+import pandas as pd
+
+
+##########################################################################################
+# params are in the config file
+##########################################################################################
+
+
+##########################################################################################
+# creating jobs output directory
+##########################################################################################
+
+# This is because otherwise it seems to fail snakemake in some clusters.
+
+jobs_output_dir = 'Output/jobs_files'
+benchmarks_output_dir = 'Output/benchmarks'
+
+
+if not os.path.exists(jobs_output_dir):
+	print("Creating jobs output directory: %s" % (jobs_output_dir) )
+	os.makedirs(jobs_output_dir)
+
+if not os.path.exists(benchmarks_output_dir):
+	print("Creating benchmarks output directory: %s" % (benchmarks_output_dir) )
+	os.makedirs(benchmarks_output_dir)
+
+##########################################################################################
+# constants
+##########################################################################################
+
+CHR_UN = "chrUn_gl000211.fa chrUn_gl000212.fa chrUn_gl000213.fa chrUn_gl000214.fa chrUn_gl000215.fa chrUn_gl000216.fa chrUn_gl000217.fa chrUn_gl000218.fa chrUn_gl000219.fa chrUn_gl000220.fa chrUn_gl000221.fa chrUn_gl000222.fa chrUn_gl000223.fa chrUn_gl000224.fa chrUn_gl000225.fa chrUn_gl000226.fa chrUn_gl000227.fa chrUn_gl000228.fa chrUn_gl000229.fa chrUn_gl000230.fa chrUn_gl000231.fa chrUn_gl000232.fa chrUn_gl000233.fa chrUn_gl000234.fa chrUn_gl000235.fa chrUn_gl000236.fa chrUn_gl000237.fa chrUn_gl000238.fa chrUn_gl000239.fa chrUn_gl000240.fa chrUn_gl000241.fa chrUn_gl000242.fa chrUn_gl000243.fa chrUn_gl000244.fa chrUn_gl000245.fa chrUn_gl000246.fa chrUn_gl000247.fa chrUn_gl000248.fa chrUn_gl000249.fa"
+CHR_RAND = "chr11_gl000202_random.fa chr17_gl000203_random.fa chr17_gl000204_random.fa chr17_gl000205_random.fa chr17_gl000206_random.fa chr18_gl000207_random.fa chr19_gl000208_random.fa chr19_gl000209_random.fa chr1_gl000191_random.fa chr1_gl000192_random.fa chr21_gl000210_random.fa chr4_gl000193_random.fa chr4_gl000194_random.fa chr7_gl000195_random.fa chr8_gl000196_random.fa chr8_gl000197_random.fa chr9_gl000198_random.fa chr9_gl000199_random.fa chr9_gl000200_random.fa chr9_gl000201_random.fa"
+CHR_HAP = "chr17_ctg5_hap1.fa chr4_ctg9_hap1.fa chr6_apd_hap1.fa chr6_cox_hap2.fa chr6_dbb_hap3.fa chr6_mann_hap4.fa chr6_mcf_hap5.fa chr6_qbl_hap6.fa chr6_ssto_hap7.fa"
+CHR_NORM =  "chr1.fa chr2.fa chr3.fa chr4.fa chr5.fa chr6.fa chr7.fa chr8.fa chr9.fa chr10.fa chr11.fa chr12.fa chr13.fa chr14.fa chr15.fa chr16.fa chr17.fa chr18.fa chr19.fa chr20.fa chr21.fa chr22.fa chrM.fa chrX.fa chrY.fa"
+
+ILLUMIN_MANIFEST_FILES = ["HumanOmni1-Quad_v1-0_H","HumanOmni2-5-8-v1-1-C","HumanOmni2-5-8-v1-0-D"]
+
+
+
+Rscript = "Rscript --no-restore --no-save "
+
+
+chrs_num_auto = ["1","2","3","4","5","6","7","8","9","10","11","12","13","14","15","16","17","18","19","20","21","22"]
+g1k_pops = ["ACB","ASW","BEB","CDX","CEU","CHB","CHS","CLM","ESN","FIN","GBR","GIH","GWD","IBS","ITU","JPT","KHV","LWK","MSL","MXL","PEL","PJL","PUR","STU","TSI","YRI"]
+
+
+cfDNA_env_activate = "source ~/miniconda3/bin/activate cfDNA"
+wasp_env_activate = "source ~/anaconda2/bin/activate wasp"
+
+cfDNA_env_deactivate = "source ~/miniconda3/bin/deactivate"
+wasp_env_deactivate = "source ~/anaconda2/bin/deactivate"
+
+changing_python_env_set = "CONDA_PATH_BACKUP=; PS1=; CONDA_OLD_PS1=;"
+
+
+##########################################################################################
+# functions
+##########################################################################################
+
+def get_patients_array_data(patients_array_type_filename):
+	patients_df = pd.read_table(patients_array_type_filename, sep='\t')
+	patients_df = patients_df[patients_df.RecArrayTypeManifest.notnull()]
+	patients_df.reset_index(inplace=True, drop=True)
+	return patients_df.Patient.tolist(), patients_df
+
+def get_patients_info(patients_df, patient_id, info_col):
+	cur_info = str(patients_df[info_col][patients_df.Patient == patient_id].values[0])
+	return(cur_info)
+	
+
+def get_samples_array_data(samples_info_table_filename):
+	samples_array_df = pd.read_table(samples_info_table_filename, sep='\t')
+	samples_array_df = samples_array_df[samples_array_df.Patient.notnull() & samples_array_df.IsFullInfo==True]
+	samples_array_df.reset_index(inplace=True, drop=True)
+	
+	all_samples = samples_array_df.SampleUniqueStr.tolist()
+	single_ends_samples = samples_array_df.SampleUniqueStr[samples_array_df.SeqType == 'single-end'].tolist()
+	paired_ends_samples = samples_array_df.SampleUniqueStr[samples_array_df.SeqType == 'paired-end'].tolist()
+	
+	return all_samples, single_ends_samples, paired_ends_samples, samples_array_df
+
+def get_sample_info(samples_array_df, sample_id, info_col):
+	return(str(samples_array_df[info_col][samples_array_df.SampleUniqueStr == sample_id].values[0]))
+
+##########################################################################################
+# load patients table
+##########################################################################################
+
+
+patients_array_type_filename = config['__default__']['DATA_DIR'] + '/' + config['__default__']['SET_NAME'] + ".recipient.genotypes.tsv"
+
+patients, patients_df = get_patients_array_data(patients_array_type_filename)
+
+
+##########################################################################################
+# load samples table
+##########################################################################################
+
+samples_info_table_filename = config['__default__']['DATA_DIR'] + '/' + config['__default__']['SET_NAME'] + ".samples.tsv"
+
+samples, single_ends_samples, paired_ends_samples, samples_array_df = get_samples_array_data(samples_info_table_filename)
+
+
+
+##########################################################################################
+# all
+##########################################################################################
+
+rule all:
+	input:
+		inferred_donor_cfDNA_table = "Output/Fit/fit_" + config["__default__"]["fit_version"] + ".res.tsv",
+		benchmark_sec_table = "Output/benchmarks/bechmark.sec.tsv",
+		benchmark_time_table = "Output/benchmarks/bechmark.time.tsv",
+		inferred_donor_cfDNA_with_stat_table = "Output/Fit/fit_" + config["__default__"]["fit_version"] + ".res.with_stat.tsv"
+
+
+##########################################################################################
+# download and parse human genome 
+##########################################################################################
+
+
+rule download_genome:
+	output:
+		hg_fa = "Input/hg19/hg19.fa",
+		hg_fa_norm = "Input/hg19/hg19_norm.fa",
+		hg_fa_withUn = "Input/hg19/hg19_withUn.fa"
+	params:
+		job_out_dir = "Output/jobs_files",
+		job_out_file="getGenome",
+		job_name="getGenome",
+		run_time="1:00:00",
+		cores="1",
+		memory="8"
+	shell:
+		"cd Input/hg19;"
+		"wget --timestamping 'ftp://hgdownload.cse.ucsc.edu/goldenPath/hg19/bigZips/chromFa.tar.gz';"
+		"tar xvzf chromFa.tar.gz;"
+		"cat " + CHR_NORM + " > hg19.tmp.fa && mv hg19.tmp.fa hg19.fa; "
+		"cat " + CHR_NORM + " > hg19_norm.tmp.fa && mv hg19_norm.tmp.fa hg19_norm.fa; "
+		"cat " + CHR_NORM + " " + CHR_UN + " > hg19_withUn.tmp.fa && mv hg19_withUn.tmp.fa hg19_withUn.fa; "
+
+
+rule bowtie2_build_index:
+	input:
+		hg_fa_withUn = "Input/hg19/hg19_withUn.fa"
+	output:
+		expand("Input/hg19/bowtie2/hg19.{index}.bt2", index=range(1,5)),
+		expand("Input/hg19/bowtie2/hg19.rev.{index}.bt2", index=range(1,3))
+	params:
+		job_out_dir = "Output/jobs_files",
+		job_out_file="bowtie2_index",
+		job_name="bowtie2_index",
+		run_time="24:00:00",
+		cores="1",
+		memory="30",
+		index_prefix="Input/hg19/bowtie2/hg19"
+	shell:
+		"bowtie2-build {input} {params.index_prefix}"
+
+
+##########################################################################################
+# download 1000 genomes
+##########################################################################################
+
+rule download_1KG:
+	output:
+		g1k = "Input/g1k/integrated_call_samples_v3.20130502.ALL.panel",
+		vcf = expand("Input/g1k/ALL.chr{chr}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz", chr=chrs_num_auto)
+	params:
+		job_out_dir = "Output/jobs_files",
+		job_out_file="dl1KG",
+		job_name="dl1KG",
+		run_time="3:00:00",
+		cores="1",
+		memory="8"
+	shell:
+		"cd Input/g1k; "
+		"wget ftp://ftp-trace.ncbi.nih.gov/1000genomes/ftp/release/20130502/*"
+
+
+##########################################################################################
+# download and parse genetic distance (decode)
+##########################################################################################
+
+decode_files = ["female.gmap","female_noncarrier.gmap","female_carrier.gmap","male.gmap","male_noncarrier.gmap","male_carrier.gmap","male.rmap","male_noncarrier.rmap","male_carrier.rmap","female.rmap","female_noncarrier.rmap","female_carrier.rmap","sex-averaged.rmap","sex-averaged_noncarrier.rmap","sex-averaged_carrier.rmap"]
+
+
+rule download_decode:
+	output:
+		decode_file = "Input/decode/{file}",
+		decode_file_parsed = "Input/decode/{file}.noSpaces"
+	params:
+		job_out_dir = "Output/jobs_files",
+		job_out_file="decode_download_{file}",
+		job_name="decode_download_{file}",
+		run_time="10:00:00",
+		cores="1",
+		memory="16"
+	shell:
+		"cd Input/decode && "
+		"wget http://www.decode.com/additional/{wildcards.file} && "
+		"cd ../.. && "
+		"cat {output.decode_file} | sed 's/ //g' > {output.decode_file_parsed}.tmp && mv {output.decode_file_parsed}.tmp {output.decode_file_parsed}; "
+
+
+##########################################################################################
+# get Illumina array information
+##########################################################################################
+
+
+rule download_array_manifest_files:
+	output:
+		array1 = "Input/illumina/HumanOmni1-Quad_v1-0_H.csv",
+		array2C = "Input/illumina/HumanOmni2-5-8-v1-1-C.csv",
+		array2D = "Input/illumina/HumanOmni2-5-8-v1-0-D.csv",
+	params:
+		job_out_dir="Output/jobs_files",
+		job_out_file="getIllumina",
+		job_name="getIllumina",
+		run_time="1:00:00",
+		cores="1",
+		memory="8"
+	shell:
+		"wget -O Input/illumina/HumanOmni1-Quad_v1-0_H.csv  ftp://webdata2:webdata2@ussd-ftp.illumina.com/downloads/ProductFiles/HumanOmni1-Quad/HumanOmni1-Quad_v1-0_H.csv; "
+		"wget -O Input/illumina/HumanOmni2-5-8-v1-1-C.csv ftp://webdata:webdata@ussd-ftp.illumina.com/Downloads/ProductFiles/HumanOmni25/v1-1/HumanOmni2-5-8-v1-1-C.csv; "
+		"wget -O Input/illumina/HumanOmni2-5-8-v1-0-D.csv   ftp://webdata:webdata@ussd-ftp.illumina.com/Downloads/ProductFiles/HumanOmni25/v1-0/HumanOmni2-5-8-v1-0-D.csv; "
+
+##########################################################################################
+# parse Illumina array information
+##########################################################################################
+
+
+rule parse_manifest:
+	input:
+		illumina_manifest_file = "Input/illumina/{manifest}.csv"
+	output:
+		illumina_manifest_file = "Input/illumina/{manifest}.tsv"
+	params:
+		job_out_dir="Output/jobs_files",
+		job_out_file="parseManifest",
+		job_name="parseManifest",
+		run_time="2:00:00",
+		cores="1",
+		memory="16"
+	shell:
+		"python {config[__default__][SCRIPTS_PATH]}/validate_illumina_manifest.py {input.illumina_manifest_file} ./Input/hg19/hg19.fa {output.illumina_manifest_file};"
+
+
+# This step can be removed if the table is set accordingly		
+rule cp_illumina_manifests:
+	input:
+		mani1 = "Input/illumina/HumanOmni1-Quad_v1-0_H.tsv",
+		mani2 = "Input/illumina/HumanOmni2-5-8-v1-1-C.tsv"
+	output:
+		mani1 = "Input/illumina/HumanOmni10.tsv",
+		mani2 = "Input/illumina/HumanOmni25.tsv"
+	params:
+		job_out_dir="Output/jobs_files",
+		job_out_file="cp_manifest",
+		job_name="cp_manifest",
+		run_time="1:00:00",
+		cores="1",
+		memory="4"
+	shell:
+		"cp {input.mani1} {output.mani1};"
+		"cp {input.mani2} {output.mani2};"
+
+rule extract_all_measured_snp_positions:
+	input:
+		manifests = ["Input/illumina/HumanOmni10.tsv", "Input/illumina/HumanOmni25.tsv"]
+	output:
+		all_measured_snp_positions = "Output/SNP/all_measured_snp_positions.tsv"
+	params:
+		job_out_dir="Output/jobs_files",
+		job_out_file="join_manifest",
+		job_name="join_manifest",
+		run_time="2:00:00",
+		cores="1",
+		memory="8"
+	shell:
+		"python {config[__default__][SCRIPTS_PATH]}/cfDNA_extract_all_measured_snp_positions.py -o {output} -f {input.manifests}"
+		
+rule all_measured_snp_positions2bed:
+	input:
+		tsv = "Output/SNP/all_measured_snp_positions.tsv"
+	output:
+		bed = "Output/SNP/all_measured_snp_positions.bed"
+	params:
+		job_out_dir="Output/jobs_files",
+		job_out_file="snps_tsv2bed",
+		job_name="snps_tsv2bed",
+		run_time="1:00:00",
+		cores="1",
+		memory="8"
+	run:
+		import pandas
+		tsv_df = pd.read_table(input.tsv, sep='\t')
+		bed_df = tsv_df.copy()
+		bed_df['Position_end'] = bed_df['Position']
+		bed_df['Position'] = bed_df['Position']-1
+		bed_df.columns = ['Chr', 'Position_start','Position_end']
+		bed_df.to_csv(output.bed, sep='\t', index = False, header = False)
+
+
+rule mask_SNPs_in_genome:
+	input:
+		bed = "Output/SNP/all_measured_snp_positions.bed",
+		hg_fa = "Input/hg19/hg19.fa"
+	output:
+		masked_fa = "Input/hg19/hg19_masked.fa",
+		masked_fai = "Input/hg19/hg19_masked.fa.fai"
+	params:
+		job_out_dir="Output/jobs_files",
+		job_out_file="mask_fa",
+		job_name="mask_fa",
+		run_time="3:00:00",
+		cores="1",
+		memory="8"
+	shell:
+		"bedtools maskfasta -fi {input.hg_fa} -fo {output.masked_fa} -bed {input.bed};"
+		"samtools faidx {output.masked_fa};"
+	
+
+##########################################################################################
+# parse 1000 genomes
+##########################################################################################
+
+rule g1k_all_vcf_2_freq:
+	input:
+		vcf = "Input/g1k/ALL.chr{chr}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz",
+		all_measured_snp_positions = "Output/SNP/all_measured_snp_positions.tsv"
+	output:
+		snp_freq = "Output/g1k/chr{chr}.g1k.tsv"
+	params:
+		job_out_dir = "Output/jobs_files",
+		job_out_file="g1k_VCF2freq_{chr}",
+		job_name="g1k_VCF2freq_{chr}",
+		run_time="47:59:00",
+		cores="1",
+		memory="30"
+	benchmark:
+		"Output/benchmarks/chr{chr}.g1k_VCF2freq.txt"
+	shell:
+		"python {config[__default__][SCRIPTS_PATH]}/g1k_filter_snps_by_measured.py "
+		" {input.vcf} {input.all_measured_snp_positions} {output.snp_freq} -q 90"
+
+rule g1k_extract_pop_samples_list:
+	input:
+		g1k_samples = "Input/g1k/integrated_call_samples_v3.20130502.ALL.panel"
+	output:
+		pop_samples_list = "Output/g1k/pops/{pop}.samples.list"
+	params:
+		job_out_dir = "Output/jobs_files",
+		job_out_file="g1k_samp_{pop}",
+		job_name="g1k_samp_{pop}",
+		run_time="3:00:00",
+		cores="1",
+		memory="8"
+	shell:
+		"grep {wildcards.pop} {input.g1k_samples} | cut -f 1 > {output.pop_samples_list}.tmp && mv {output.pop_samples_list}.tmp {output.pop_samples_list};"
+	
+rule g1k_extract_pop_g1k_vcf:
+	input:
+		vcf = "Input/g1k/ALL.chr{chr}.phase3_shapeit2_mvncall_integrated_v5a.20130502.genotypes.vcf.gz",
+		samples_list = "Output/g1k/pops/{pop}.samples.list"
+	output:
+		pop_chr_vcf = "Output/g1k/pops/{pop}.chr{chr}.vcf.gz"
+	params:
+		job_out_dir = "Output/jobs_files",
+		job_out_file="g1k_popVCF_{pop}_{chr}",
+		job_name="g1k_popVCF_{pop}_{chr}",
+		run_time="23:59:00",
+		cores="1",
+		memory="16"
+	shell:
+			"vcf-subset -c {input.samples_list} {input.vcf} "
+			"| fill-an-ac | gzip -c > {output.pop_chr_vcf}.tmp && mv {output.pop_chr_vcf}.tmp {output.pop_chr_vcf}"
+		
+rule g1k_pop_vcf_2_freq:
+	input:
+		pop_chr_vcf = "Output/g1k/pops/{pop}.chr{chr}.vcf.gz",
+		all_measured_snp_positions = "Output/SNP/all_measured_snp_positions.tsv"
+	output:
+		pop_snp_freq = "Output/g1k/pops/{pop}.chr{chr}.g1k.tsv"
+	params:
+		job_out_dir = "Output/jobs_files",
+		job_out_file="g1k_VCF2freq_{pop}_{chr}",
+		job_name="g1k_VCF2freq_{pop}_{chr}",
+		run_time="23:59:00",
+		cores="1",
+		memory="8"
+	shell:
+		"python {config[__default__][SCRIPTS_PATH]}/g1k_filter_snps_by_measured.py "
+		" {input.pop_chr_vcf} {input.all_measured_snp_positions} {output.pop_snp_freq} -p {wildcards.pop} -q 90"
+
+
+# this also filter out multi-allelic SNPs that appear in more than one line 
+# TODO, also removed SNPs in the same positions with two names if such exists
+rule g1k_merge_pop_freq_per_chr:
+	input:
+		snp_freq = "Output/g1k/chr{chr}.g1k.tsv",
+		pop_snp_freq = expand("Output/g1k/pops/{pop}.chr{{chr}}.g1k.tsv", pop=g1k_pops)
+	output:
+		joined_snp_freq = "Output/g1k/all_pop_chr{chr}.g1k.tsv"
+	params:
+		job_out_dir = "Output/jobs_files",
+		job_out_file="g1k_joinPopFreq_{chr}",
+		job_name="g1k_joinPopFreq_{chr}",
+		run_time="2:59:00",
+		cores="1",
+		memory="15",
+	run:
+		import pandas
+		measured_SNPs_df = pd.read_table(input.snp_freq, sep='\t')
+		measured_SNPs_df = measured_SNPs_df.ix[~ measured_SNPs_df[['Chr','Position','g1000_ID']].duplicated(keep=False),]
+		for pop_freq_filename in input.pop_snp_freq:
+			cur_pop_measured_SNPs_df = pd.read_table(pop_freq_filename, sep='\t')
+			cur_pop_measured_SNPs_df = cur_pop_measured_SNPs_df.ix[~ cur_pop_measured_SNPs_df[['Chr','Position','g1000_ID']].duplicated(keep=False),]
+			measured_SNPs_df = pd.merge(measured_SNPs_df, cur_pop_measured_SNPs_df, on = ['Chr','Position','g1000_ID'])
+		measured_SNPs_df = measured_SNPs_df.ix[~ measured_SNPs_df[['Chr','Position','g1000_ID']].duplicated(keep=False),]
+		measured_SNPs_df.ix[ ~measured_SNPs_df[['Chr','Position']].duplicated(keep=False),]
+		measured_SNPs_df.to_csv(output.joined_snp_freq, sep='\t', index = False)
+
+rule g1k_concat_chr_pop_freq:
+	input:
+		chr_snp_freq = expand("Output/g1k/all_pop_chr{chr}.g1k.tsv", chr=chrs_num_auto)
+	output:
+		joined_snp_freq = "Output/g1k/all_pop.g1k.tsv.gz"
+	params:
+		job_out_dir = "Output/jobs_files",
+		job_out_file="g1k_joinChrFreq",
+		job_name="g1k_joinChrFreq",
+		run_time="2:59:00",
+		cores="1",
+		memory="15",
+	run:
+		import pandas
+		measured_SNPs_df = pd.DataFrame(None)
+		for chr_snp_freq_filename in input.chr_snp_freq:
+			cur_df = pd.read_table(chr_snp_freq_filename, sep='\t')
+			measured_SNPs_df = pd.concat([measured_SNPs_df, cur_df],ignore_index=True)
+		measured_SNPs_df.to_csv(output.joined_snp_freq, sep='\t', index = False, compression='gzip')
+
+
+##########################################################################################
+##########################################################################################
+# process patients genotypes
+##########################################################################################
+##########################################################################################
+
+rule patient_get_genotype:
+	input:
+		mani1 = "Input/illumina/HumanOmni10.tsv",
+		mani2 = "Input/illumina/HumanOmni25.tsv"
+	output:
+		patient_genotype_raw = "Output/genotypes/{patient}.genotype.tsv.gz"
+	params:
+		job_out_dir="Output/jobs_files",
+		job_out_file="get_geno_{patient}",
+		job_name="get_geno_{patient}",
+		run_time="3:00:00",
+		cores="1",
+		memory="8",
+		patient_array = lambda wildcards: get_patients_info(patients_df, wildcards.patient, 'RecArrayTypeManifest'),
+		final_report_filename = lambda wildcards: get_patients_info(patients_df, wildcards.patient, 'RecFullTableLocal'),
+		id_in_final_report = lambda wildcards: get_patients_info(patients_df, wildcards.patient, 'RecFullTableID')
+	shell:
+		"{Rscript} {config[__default__][SCRIPTS_PATH]}/R/cfDNA_parse_illumina_final_report.R "
+		"{params.final_report_filename} {params.id_in_final_report} Input/illumina/{params.patient_array}.tsv {output.patient_genotype_raw}"
+
+rule patient_add_g1k_freq:
+	input:
+		joined_snp_freq = "Output/g1k/all_pop.g1k.tsv.gz",
+		patient_genotype_raw = "Output/genotypes/{patient}.genotype.tsv.gz"
+	output:
+		patient_genotype_withg1k = "Output/genotypes/{patient}.g1k.tsv.gz"
+	params:
+		job_out_dir="Output/jobs_files",
+		job_out_file="p_g1k_{patient}",
+		job_name="p_g1k_{patient}",
+		run_time="3:00:00",
+		cores="1",
+		memory="16",
+		min_SNP_GC_score=config["patient_add_g1k_freq"]["min_SNP_GC_score"]
+	run:
+		import pandas
+		g1k_df = pd.read_table(input.joined_snp_freq, sep='\t')
+		p_geno_df = pd.read_table(input.patient_genotype_raw, sep='\t')
+		p_geno_df = p_geno_df.ix[p_geno_df['GCScore'] >= float(params.min_SNP_GC_score),]
+		out_df = pd.merge(p_geno_df,g1k_df, on = ['Chr','Position'], how='left')
+		out_df.sort_values(by =['Chr', 'Position', 'GCScore'], ascending=[True,True,False], inplace=True)
+		out_df = out_df.ix[~out_df[['Chr', 'Position']].duplicated(keep = 'first'),]
+		out_df = out_df.ix[out_df.g1000_Allele1.apply(lambda x:  (len(str(x)) == 1) ) & out_df.g1000_Allele2.apply(lambda x:  (len(str(x)) == 1) ),]
+		out_df.to_csv(output.patient_genotype_withg1k, sep='\t', index = False, compression='gzip')
+
+rule patient_prepare_WASP_dir:
+	input:
+		patient_genotype_withg1k = "Output/genotypes/{patient}.g1k.tsv.gz"
+	output:
+		expand("Output/genotypes/{{patient}}/chr{chr}.snps.txt.gz", chr=chrs_num_auto)
+	params:
+		job_out_dir="Output/jobs_files",
+		job_out_file="p_g1k_{patient}",
+		job_name="p_g1k_{patient}",
+		run_time="3:00:00",
+		cores="1",
+		memory="8"
+	run:
+		import pandas
+		g1k_df = pd.read_table(input.patient_genotype_withg1k, sep='\t')
+		for chr_str in [ 'chr' + str(chr) for chr in chrs_num_auto]:
+			cur_df = g1k_df.ix[g1k_df.Chr == chr_str, ["Position", "g1000_Allele1", "g1000_Allele2"] ]
+			cur_df.to_csv('Output/genotypes/' + wildcards.patient + '/' + chr_str + '.snps.txt.gz', sep='\t', index = False, header = False, compression='gzip')
+
+
+##########################################################################################
+##########################################################################################
+# process cfDNA sequencing samples
+##########################################################################################
+##########################################################################################
+
+##########################################################################################
+# constants and functions for this part
+##########################################################################################
+
+
+bowtie2_cmd_pe_beforeWASP = "bowtie2 -D 20 -R 3 -N 0 -L 20 -i S,1,0.50 -I 20 -X 500 -5 1 --no-mixed --no-discordant --no-unal -t "
+bowtie2_cmd_pe_afterWASP  = "bowtie2 -D 20 -R 3 -N 0 -L 20 -i S,1,0.50 -I 20 -X 500 --no-mixed --no-discordant --no-unal -t "
+
+bowtie2_cmd_se_beforeWASP = "bowtie2 -D 20 -R 3 -N 0 -L 20 -i S,1,0.50 -I 20 -X 500 -5 1 --no-unal -t "
+bowtie2_cmd_se_afterWASP  = "bowtie2 -D 20 -R 3 -N 0 -L 20 -i S,1,0.50 -I 20 -X 500 --no-unal -t "
+
+samtools_cmd_pe = "samtools view -S -b -h -f 3 -F 3852 -q 13 - "
+samtools_cmd_se = "samtools view -S -b -h -F 3844 -q 13 - "
+
+
+def get_sample_raw_reads_names(wildcards):
+	"""
+	This function return either one or two files depending the sequencing type 
+	"""
+	if get_sample_info(samples_array_df, wildcards.sample, 'SeqType') == 'paired-end':
+		return( { 'r1' : get_sample_info(samples_array_df, wildcards.sample, 'ReadLocal1'),
+							'r2' : get_sample_info(samples_array_df, wildcards.sample, 'ReadLocal2')}  )
+	else: # assuming 'single-end'
+		return( { 'r1' : get_sample_info(samples_array_df, wildcards.sample, 'ReadLocal1') })
+
+
+def get_sample_WASP_chrSNP_files(wildcards):
+	patient = get_sample_info(samples_array_df, wildcards.sample, 'Patient')
+	return(expand("Output/genotypes/" + patient + "/chr{chr}.snps.txt.gz", chr=chrs_num_auto))
+
+
+# NOTE current solution to running either paired ends or single ends is to touch dummy files to make the output files fixed
+
+##########################################################################################
+# rules
+##########################################################################################
+
+# the filtering step is also used to copy the files to standard file names
+
+rule filter_low_quality_reads:
+	input:
+		unpack(get_sample_raw_reads_names)
+	output: 
+		r1 = "Output/sequencing/{sample}.R1.filterred.fastq.gz",
+		r2 = "Output/sequencing/{sample}.R2.filterred.fastq.gz"
+	params:
+		job_out_dir  = "Output/jobs_files",
+		job_out_file = "s_{sample}_qualityFilter",
+		job_name     = "s_{sample}_qualityFilter",
+		run_time     = "23:59:00",
+		cores        = "1",
+		memory       = "12",
+		out_prefix = "Output/sequencing/{sample}",
+		min_bp_Q = config["filter_low_quality_reads"]["min_bp_Q"],
+		min_read_percent= config["filter_low_quality_reads"]["min_read_percent"],
+		seq_type = lambda wildcards: get_sample_info(samples_array_df, wildcards.sample, 'SeqType')
+	benchmark:
+		"Output/benchmarks/{sample}.qualityFilter.txt"
+	run:
+		if params.seq_type == "paired-end":
+			shell("python {config[__default__][SCRIPTS_PATH]}/filter_fastq.py --r1 {input.r1} --r2 {input.r2} --o {params.out_prefix} --q {params.min_bp_Q} --p {params.min_read_percent}")
+		else: # assuming params.seq_type == "single-end":
+			shell("python {config[__default__][SCRIPTS_PATH]}/filter_fastq.py --r1 {input.r1} --r2 'NA' --o {params.out_prefix} --q {params.min_bp_Q} --p {params.min_read_percent} && touch {output.r2}")
+			
+
+rule map_reads:
+	input:
+		expand("Input/hg19/bowtie2/hg19.{index}.bt2", index=range(1,5)),
+		expand("Input/hg19/bowtie2/hg19.rev.{index}.bt2", index=range(1,3)),
+		r1 = "Output/sequencing/{sample}.R1.filterred.fastq.gz",
+		r2 = "Output/sequencing/{sample}.R2.filterred.fastq.gz"
+	output: 
+		bam = "Output/mapping/{sample,[^\/\.]+}.bam"
+	params:
+		job_out_dir  = "Output/jobs_files",
+		job_out_file = "s_map_{sample}",
+		job_name     = "s_map_{sample}",
+		run_time     = "47:59:00",
+		cores        = "1",
+		memory       = "20",
+		seq_type = lambda wildcards: get_sample_info(samples_array_df, wildcards.sample, 'SeqType'),
+		bowtie2_index="Input/hg19/bowtie2/hg19"
+	benchmark:
+		"Output/benchmarks/{sample}.mapReads.txt"
+	run:
+		if params.seq_type == "paired-end":
+			shell(bowtie2_cmd_pe_beforeWASP + " -x {params.bowtie2_index} -1 {input.r1} -2 {input.r2} | " + samtools_cmd_pe + " > {output.bam}.tmp && mv {output.bam}.tmp {output.bam};")
+		else: # assuming params.seq_type == "single-end":
+			shell(bowtie2_cmd_se_beforeWASP + " -x {params.bowtie2_index} -U {input.r1} | " + samtools_cmd_se + " > {output.bam}.tmp && mv {output.bam}.tmp {output.bam};")
+
+
+rule WASP_find_intersecting_snps:
+	input:
+		get_sample_WASP_chrSNP_files,
+		bam = "Output/mapping/{sample}.bam"
+	output:
+		bam_remap = "Output/mapping/{sample,[^\/\.]+}.to.remap.bam",
+		fq_remap_single = "Output/mapping/{sample,[^\/\.]+}.remap.single.fq.gz",
+		fq_remap_r1 = "Output/mapping/{sample,[^\/\.]+}.remap.fq1.gz",
+		fq_remap_r2 = "Output/mapping/{sample,[^\/\.]+}.remap.fq2.gz",
+		fq_remap_u = "Output/mapping/{sample,[^\/\.]+}.remap.fq.gz"		
+	params:
+		job_out_dir  = "Output/jobs_files",
+		job_out_file = "s_WASPinter_{sample}",
+		job_name     = "s_WASPinter_{sample}",
+		run_time     = "23:59:00",
+		cores        = "1",
+		memory       = "16",
+		seq_type = lambda wildcards: get_sample_info(samples_array_df, wildcards.sample, 'SeqType'),
+		patient = lambda wildcards: get_sample_info(samples_array_df, wildcards.sample, 'Patient'),
+		out_prefix = "Output/mapping/{sample}",
+		output_dir = "Output/mapping"
+	benchmark:
+		"Output/benchmarks/{sample}.WASPfindIntersectingSNPs.txt"
+	run:
+		if params.seq_type == "paired-end":
+			shell("{changing_python_env_set} {wasp_env_activate}; python {config[__default__][SCRIPTS_PATH]}/wasp/find_intersecting_snps.py --is_paired_end --snp_dir Output/genotypes/{params.patient} --output_dir {params.output_dir} {input.bam} ; touch {output.fq_remap_u};  rm {params.out_prefix}.keep.bam; {wasp_env_deactivate}")
+		else: # assuming params.seq_type == "single-end":
+			shell("{changing_python_env_set} {wasp_env_activate}; python {config[__default__][SCRIPTS_PATH]}/wasp/find_intersecting_snps.py                 --snp_dir Output/genotypes/{params.patient} --output_dir {params.output_dir} {input.bam}; touch {output.fq_remap_r1}; touch {output.fq_remap_r2}; touch {output.fq_remap_single}; rm {params.out_prefix}.keep.bam; {wasp_env_deactivate}")
+
+
+rule WASP_remap_reads:
+	input:
+		bam_remap = "Output/mapping/{sample}.to.remap.bam",
+		fq_remap_single = "Output/mapping/{sample}.remap.single.fq.gz",
+		fq_remap_r1 = "Output/mapping/{sample}.remap.fq1.gz",
+		fq_remap_r2 = "Output/mapping/{sample}.remap.fq2.gz",
+		fq_remap_u = "Output/mapping/{sample}.remap.fq.gz"	
+	output: 
+		bam_remapped = "Output/wasp_remapped/{sample,[^\/\.]+}.remapped.bam"
+	params:
+		job_out_dir  = "Output/jobs_files",
+		job_out_file = "s_WASPremap_{sample}",
+		job_name     = "s_WASPremap_{sample}",
+		run_time     = "47:59:00",
+		cores        = "1",
+		memory       = "16",
+		seq_type = lambda wildcards: get_sample_info(samples_array_df, wildcards.sample, 'SeqType'),
+		bowtie2_index="Input/hg19/bowtie2/hg19"
+	benchmark:
+		"Output/benchmarks/{sample}.remapWASPreads.txt"
+	run:
+		if params.seq_type == "paired-end":
+			shell(bowtie2_cmd_pe_afterWASP + " -x {params.bowtie2_index} -1 {input.fq_remap_r1} -2 {input.fq_remap_r2} | " + samtools_cmd_pe + " > {output.bam_remapped}.tmp && mv {output.bam_remapped}.tmp {output.bam_remapped};")
+		else: # assuming params.seq_type == "single-end":
+			shell(bowtie2_cmd_se_afterWASP + " -x {params.bowtie2_index} -U {input.fq_remap_u} | " + samtools_cmd_se + " > {output.bam_remapped}.tmp && mv {output.bam_remapped}.tmp {output.bam_remapped};")
+
+rule WASP_filter_remapped_reads:
+	input:
+		bam_remap = "Output/mapping/{sample}.to.remap.bam",
+		bam_remapped = "Output/wasp_remapped/{sample}.remapped.bam"
+	output:
+		bam_keep = "Output/wasp_filt/{sample,[^\/\.]+}.bam"
+	params:
+		job_out_dir  = "Output/jobs_files",
+		job_out_file = "s_WASPfilt_{sample}",
+		job_name     = "s_WASPfilt_{sample}",
+		run_time     = "47:59:00",
+		cores        = "1",
+		memory       = "16",
+		seq_type = lambda wildcards: get_sample_info(samples_array_df, wildcards.sample, 'SeqType'),
+		patient = lambda wildcards: get_sample_info(samples_array_df, wildcards.sample, 'Patient'),
+		out_prefix = "Output/mapping/{sample}"
+	benchmark:
+		"Output/benchmarks/{sample}.WASPfilterRemappedReads.txt"
+	shell:
+		"{changing_python_env_set}{wasp_env_activate}; python {config[__default__][SCRIPTS_PATH]}/wasp/filter_remapped_reads.py {input.bam_remap} {input.bam_remapped} {output.bam_keep}; {wasp_env_deactivate}"
+
+
+rule rm_dup_reads:
+	input:
+		bam = "Output/wasp_filt/{sample}.bam"
+	output:
+		in_bam_sorted = "Output/wasp_filt/{sample,[^\/\.]+}.sort.bam",
+		bam = "Output/wasp_out/{sample,[^\/\.]+}.bam"
+	params:
+		job_out_dir  = "Output/jobs_files",
+		job_out_file = "s_rmdup_{sample}",
+		job_name     = "s_rmdup_{sample}",
+		run_time     = "2:59:00",
+		cores        = "1",
+		memory       = "16",
+		seq_type = lambda wildcards: get_sample_info(samples_array_df, wildcards.sample, 'SeqType'),
+		patient = lambda wildcards: get_sample_info(samples_array_df, wildcards.sample, 'Patient')
+	benchmark:
+		"Output/benchmarks/{sample}.rmdup.txt"
+	run:
+		if params.seq_type == "paired-end":
+			shell("samtools sort -o {output.in_bam_sorted} {input.bam} ;{changing_python_env_set}{wasp_env_activate}; python {config[__default__][SCRIPTS_PATH]}/wasp/rmdup_pe.py {output.in_bam_sorted} {output.bam}; rm -f {output.in_bam_sorted}.tmp.*; {wasp_env_deactivate};")
+		else: # assuming params.seq_type == "single-end":
+			shell("samtools sort -o {output.in_bam_sorted} {input.bam} ;{changing_python_env_set}{wasp_env_activate}; python {config[__default__][SCRIPTS_PATH]}/wasp/rmdup.py    {output.in_bam_sorted} {output.bam}; rm -f {output.in_bam_sorted}.tmp.*; {wasp_env_deactivate};	")
+
+
+##########################################################################################
+##########################################################################################
+# count reads mapping to SNPs
+##########################################################################################
+##########################################################################################
+
+def get_sample_patient_g1k(wildcards):
+	return("Output/genotypes/" + get_sample_info(samples_array_df, wildcards.sample, 'Patient') + ".g1k.tsv.gz")
+
+def get_sample_patient_genotype(wildcards):
+	return("Output/genotypes/" + get_sample_info(samples_array_df, wildcards.sample, 'Patient') + ".genotype.tsv.gz")
+
+
+rule count_cfDNA_SNP_alleles:
+	input:
+		bam = "Output/wasp_out/{sample}.bam",
+		masked_fa = "Input/hg19/hg19_masked.fa",
+		masked_fai = "Input/hg19/hg19_masked.fa.fai",
+		bed = "Output/SNP/all_measured_snp_positions.bed"
+	output:
+		pileup = "Output/pileup/{sample}.pileup.gz"
+	params:
+		job_out_dir  = "Output/jobs_files",
+		job_out_file = "s_pileup_{sample}",
+		job_name     = "s_pileup_{sample}",
+		run_time     = "10:00:00",
+		cores        = "1",
+		memory       = "16",
+		tmp_bam = "Output/wasp_out/{sample}.bam.tmp.sorted" 
+	benchmark:
+		"Output/benchmarks/{sample}.pileup.txt"
+	shell:
+		"samtools sort {input.bam} -O BAM -T {params.tmp_bam} | samtools mpileup -l {input.bed} -f {input.masked_fa} - | gzip -c > {output.pileup}.tmp && mv {output.pileup}.tmp {output.pileup};"
+
+rule parse_pileup:
+	input:
+		pileup = "Output/pileup/{sample}.pileup.gz"
+	output:
+		tsv = "Output/pileup_parsed/{sample}.allele_counts.tsv.gz"
+	params:
+		job_out_dir  = "Output/jobs_files",
+		job_out_file = "s_parse_pileup_{sample}",
+		job_name     = "s_parse_pileup_{sample}",
+		run_time     = "10:00:00",
+		cores        = "1",
+		memory       = "4"
+	benchmark:
+		"Output/benchmarks/{sample}.parsing_mpile.txt"
+	shell:
+		"zcat {input.pileup} | python {config[__default__][SCRIPTS_PATH]}/parse_pileup_file.py | gzip -c > {output.tsv}.tmp && mv {output.tsv}.tmp {output.tsv};"
+		
+
+rule join_sample_allele_cnt_and_g1k:
+	input:
+		patient_genotype_withg1k = get_sample_patient_g1k,
+		pileup_tsv = "Output/pileup_parsed/{sample}.allele_counts.tsv.gz"
+	output:
+		sample_ac_geno = "Output/SampleGenotypes/{sample}.allele_cnt.geno.gz"
+	params:
+		job_out_dir  = "Output/jobs_files",
+		job_out_file = "s_{sample}_joinAlleleCntAndG1K",
+		job_name     = "s_{sample}_joinAlleleCntAndG1K",
+		run_time     = "3:59:00",
+		cores        = "1",
+		memory       = "20"
+	benchmark:
+		"Output/benchmarks/{sample}.join_g1k_2_allele_cnt.txt"
+	shell:
+		"python {config[__default__][SCRIPTS_PATH]}/cfDNA_join_genotypes_and_allele_cnt.py "
+		"{input.patient_genotype_withg1k} {input.pileup_tsv} {output.sample_ac_geno} -g {config[join_sample_allele_cnt_and_g1k][min_SNP_GC_score]}"	
+	
+	
+rule add_genetic_distance_2_sample_allele_cnt_and_g1k:
+	input:
+		expand("Input/decode/{file}.noSpaces", file=decode_files),
+		sample_ac_geno = "Output/SampleGenotypes/{sample}.allele_cnt.geno.gz"
+	output:
+		sample_ac_geno_dist = "Output/SampleGenotypes/{sample}.allele_cnt.geno.dist.gz"
+	params:
+		job_out_dir  = "Output/jobs_files",
+		job_out_file = "s_{sample}_geno",
+		job_name     = "s_{sample}_geno",
+		run_time     = "3:00:00",
+		cores        = "1",
+		memory       = "16",
+		decode_dir = "Input/decode"
+	benchmark:
+		"Output/benchmarks/{sample}.add_decode.txt"
+	shell:
+		"{Rscript} {config[__default__][SCRIPTS_PATH]}/R/cfDNA_add_genetic_distance.R "
+		"{input.sample_ac_geno} {params.decode_dir} {output.sample_ac_geno_dist}"
+
+
+##########################################################################################
+##########################################################################################
+# run inference of donor levels
+##########################################################################################
+##########################################################################################
+
+
+def get_sample_donor_relatedness(samples_array_df, sample_id, info_col):
+	if info_col in samples_array_df.columns:
+		return(samples_array_df[info_col][samples_array_df.SampleUniqueStr == sample_id].values[0])
+	else:
+		return('UNKNOWN')
+
+
+rule filter_genotype_files:
+	input:
+		sample_ac_geno_dist = "Output/SampleGenotypes/{sample}.allele_cnt.geno.dist.gz"
+	output:
+		sample_ac_geno_dist_filt = "Output/SampleGenotypes/" + config["__default__"]["fit_version"] + "/{sample}.allele_cnt.geno.dist.filt.gz"
+	params:
+		job_out_dir  = "Output/jobs_files",
+		job_out_file = "s_{sample}_filtGeno" + config["__default__"]["fit_version"],
+		job_name     = "s_{sample}_filtGeno" + config["__default__"]["fit_version"],
+		run_time     = "3:00:00",
+		cores        = "1",
+		memory       = "4"
+	benchmark:
+		"Output/benchmarks/{sample}.filterSNPs_" + config["__default__"]["fit_version"] + ".txt"
+	shell:
+		"python {config[__default__][SCRIPTS_PATH]}/cfDNA_filter_SNPs.py "
+		"{input.sample_ac_geno_dist} {output.sample_ac_geno_dist_filt} "
+		"-f {config[filter_genotype_files][low_allele_frequency_threshold]} "
+		"{config[filter_genotype_files][is_threshold_for_any_pop]} "
+		"-s {config[filter_genotype_files][min_number_of_SNPs_per_block]} "
+		"-r {config[filter_genotype_files][min_number_of_reads_per_block]} "
+		"-g {config[filter_genotype_files][min_gc_score]} "
+
+
+rule infer_donor_cfDNA_level:
+	input:
+		sample_ac_geno_dist = "Output/SampleGenotypes/" + config["__default__"]["fit_version"] + "/{sample}.allele_cnt.geno.dist.filt.gz"
+	output:
+		sample_inferred_donor_cfDNA = "Output/Fit/" + config["__default__"]["fit_version"] + "/{sample}.param_fit_results.tsv"
+	params:
+		job_out_dir  = "Output/jobs_files",
+		job_out_file = "s_{sample}_infer",
+		job_name     = "s_{sample}_infer",
+		run_time     = "47:59:59",
+		cores        = "1",
+		memory       = "8",
+		input_relatedness = lambda wildcards: get_sample_donor_relatedness(samples_array_df, wildcards.sample, 'DonorType')
+	benchmark:
+		"Output/benchmarks/{sample}.infer.txt"
+	shell:
+		"export LD_LIBRARY_PATH=~/miniconda3/envs/cfDNA/lib "
+		"export PYTHONHOME=~/miniconda3/envs/cfDNA; "
+		"python {config[__default__][SCRIPTS_PATH]}/cfDNA_infer_donor_fraction.exe "
+		"{input.sample_ac_geno_dist} {output.sample_inferred_donor_cfDNA} "
+		"-s {wildcards.sample} "
+		"-i {config[infer_donor_cfDNA_level][infer_relatedness]} "
+		"-r {params.input_relatedness} "
+		"-n {config[infer_donor_cfDNA_level][num_optimization_starting_points]} "
+		"-m {config[infer_donor_cfDNA_level][minimal_allele_frequency]} "
+		" {config[infer_donor_cfDNA_level][use_relationship_prior]} "
+		"-v ;"
+		"export LD_LIBRARY_PATH=; "
+		"export PYTHONHOME=; "
+		
+
+##########################################################################################
+##########################################################################################
+# collect samples
+##########################################################################################
+##########################################################################################
+
+
+rule collect_donor_cfDNA_level:
+	input:
+		expand("Output/Fit/" + config["__default__"]["fit_version"] + "/{sample}.param_fit_results.tsv", sample=samples),
+		samples_table = samples_info_table_filename
+	output:
+		inferred_donor_cfDNA_table = "Output/Fit/fit_" + config["__default__"]["fit_version"] + ".res.tsv"
+	params:
+		job_out_dir  = "Output/jobs_files",
+		job_out_file = "collect_donor_cfDNA",
+		job_name     = "collect_donor_cfDNA",
+		run_time     = "2:00:00",
+		cores        = "1",
+		memory       = "4",
+		output_dir = "Output/Fit/" + config["__default__"]["fit_version"]
+	shell:
+		"python {config[__default__][SCRIPTS_PATH]}/cfDNA_collect_inference_results.py "
+		"{input.samples_table} {params.output_dir} {output.inferred_donor_cfDNA_table}"
+
+
+
+
+##########################################################################################
+##########################################################################################
+# add run stat
+##########################################################################################
+##########################################################################################
+
+
+rule collect_run_stats:
+	input:
+		inferred_donor_cfDNA_table = "Output/Fit/fit_" + config["__default__"]["fit_version"] + ".res.tsv"
+	output:
+		inferred_donor_cfDNA_with_stat_table = "Output/Fit/fit_" + config["__default__"]["fit_version"] + ".res.with_stat.tsv"
+	params:
+		job_out_dir  = "Output/jobs_files",
+		job_out_file = "collect_run_stats",
+		job_name     = "collect_run_stats",
+		run_time     = "47:59:00",
+		cores        = "1",
+		memory       = "16",
+		output_dir = "Output/Fit/" + config["__default__"]["fit_version"]
+	shell:
+		"python {config[__default__][SCRIPTS_PATH]}/cfDNA_collect_run_stats.py "
+		"{input.inferred_donor_cfDNA_table} {output.inferred_donor_cfDNA_with_stat_table}"
+
+
+##########################################################################################
+##########################################################################################
+# create benchmark tables
+##########################################################################################
+##########################################################################################
+
+
+rule collect_bechmark:
+	input:
+		inferred_donor_cfDNA_table = "Output/Fit/fit_" + config["__default__"]["fit_version"] + ".res.tsv"
+	output:
+		benchmark_sec_table = "Output/benchmarks/bechmark.sec.tsv",
+		benchmark_time_table = "Output/benchmarks/bechmark.time.tsv"
+	params:
+		job_out_dir  = "Output/jobs_files",
+		job_out_file = "collect_bechmark",
+		job_name     = "collect_bechmark",
+		run_time     = "2:00:00",
+		cores        = "1",
+		memory       = "4",
+		benchmark_dir = "Output/benchmarks/"
+	shell:
+		"python {config[__default__][SCRIPTS_PATH]}/collect_snakemake_benchmark.py "
+		" {params.benchmark_dir} {output.benchmark_sec_table} {output.benchmark_time_table}"
+

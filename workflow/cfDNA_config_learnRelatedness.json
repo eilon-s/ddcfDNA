@@ -1,0 +1,39 @@
+{
+  "__default__" :
+  {
+    "SCRIPTS_PATH" : "~/bin/ddcfDNA",
+    "DATA_DIR" : "~/ddcfDNA/Data",
+    "SET_NAME" : "bm",
+    "fit_version" : "LearnRelatedness"
+  },
+  "filter_low_quality_reads" :
+  {
+    "min_bp_Q" : "21",
+    "min_read_percent" : "0.5"
+    
+  },
+  "join_sample_allele_cnt_and_g1k" :
+  {
+    "min_SNP_GC_score" : "0.7"
+  },
+  "patient_add_g1k_freq" :
+  {
+    "min_SNP_GC_score" : "0.7"
+  },
+  "filter_genotype_files" :
+  {
+    "low_allele_frequency_threshold" : "0.01",
+    "is_threshold_for_any_pop" : "",
+    "min_number_of_SNPs_per_block" : "1",
+    "min_number_of_reads_per_block" : "1",
+    "min_gc_score" : "0.7"
+  },
+  "infer_donor_cfDNA_level" :
+  {
+    "infer_relatedness" : "LearnAll",
+    "num_optimization_starting_points" : "6",
+    "minimal_allele_frequency" : "1e-5",
+    "use_relationship_prior" : "",
+    "verbose" : "False"
+  }
+}
