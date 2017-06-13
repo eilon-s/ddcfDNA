@@ -12,7 +12,7 @@ pip install --user autograd;
 
 *clone this github.
 
-## installing WASP
+## Installing WASP
 
 * download the scripts in the mapping directory from WASP github https://github.com/gmcvicker/WASP
 * copy the scripts from WASP mapping to {cfDNA scripts path}/WASP 
