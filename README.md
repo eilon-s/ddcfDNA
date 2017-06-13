@@ -1,6 +1,6 @@
 # ddcfDNA
 
-## installing ddcfDNA
+## Installing ddcfDNA
 
 * install miniconda3 (https://conda.io/miniconda.html)
 * ~/miniconda3/bin/conda config --add channels r
