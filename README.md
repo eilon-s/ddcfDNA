@@ -55,4 +55,6 @@ The inference step executble will run only on a linux machine (linux-x86_64-3.5)
 3. If multiple samples are run you can use this script to colelect the results: cfDNA_collect_inference_results.py
   Otherwise, the output is a table. Each row represent one possible donor population. You should use the results in the row that is marked as selected by the algorithm. 
 
+## Citation
 
+Please cite http://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1005629 (PMID: 28771616)
