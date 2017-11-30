@@ -468,7 +468,7 @@ rule patient_get_genotype:
 		final_report_filename = lambda wildcards: get_patients_info(patients_df, wildcards.patient, 'RecFullTableLocal'),
 		id_in_final_report = lambda wildcards: get_patients_info(patients_df, wildcards.patient, 'RecFullTableID')
 	shell:
-		"{Rscript} {config[__default__][SCRIPTS_PATH]}/R/cfDNA_parse_illumina_final_report.R "
+		"{Rscript} {config[__default__][SCRIPTS_PATH]}/cfDNA_parse_illumina_final_report.R "
 		"{params.final_report_filename} {params.id_in_final_report} Input/illumina/{params.patient_array}.tsv {output.patient_genotype_raw}"
 
 rule patient_add_g1k_freq:
@@ -804,7 +804,7 @@ rule add_genetic_distance_2_sample_allele_cnt_and_g1k:
 	benchmark:
 		"Output/benchmarks/{sample}.add_decode.txt"
 	shell:
-		"{Rscript} {config[__default__][SCRIPTS_PATH]}/R/cfDNA_add_genetic_distance.R "
+		"{Rscript} {config[__default__][SCRIPTS_PATH]}/cfDNA_add_genetic_distance.R "
 		"{input.sample_ac_geno} {params.decode_dir} {output.sample_ac_geno_dist}"
 
 
